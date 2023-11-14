@@ -29,13 +29,13 @@ bind_combined_model_descriptor_set(cmdbuffer); # but implemented how?
 # Here we're dividing up geometry by blend mode, so all the opaque objects are drawn first,
 # then all the alpha-clipped objects, etc.
 
-bind_render_pipeline(cmdbuffer, opaque_pipeline); 
+bind_render_pipeline(cmdbuffer, opaque_pipeline);
 draw_all_opaque_models(); # but implemented how?
 
-bind_render_pipeline(cmdbuffer, alpha_clip_pipeline); 
+bind_render_pipeline(cmdbuffer, alpha_clip_pipeline);
 draw_all_alpha_clip_models();
 
-bind_render_pipeline(cmdbuffer, alpha_blend_pipeline); 
+bind_render_pipeline(cmdbuffer, alpha_blend_pipeline);
 draw_all_alpha_blend_models();
 ```
 
@@ -91,12 +91,12 @@ Mesh shaders let you stream geometry from the scene description to the rasterize
 
 A: They both suck in their naïve implementations.
 
-If you have 
+If you have
 
-`P` = the number of pixels being rendered to  
-`L` = the number of lights in the scene  
-`G` = the number of geometry being written  
-`log2(G)` = roughly the amount of overdraw per pixel  
+`P` = the number of pixels being rendered to
+`L` = the number of lights in the scene
+`G` = the number of geometry being written
+`log2(G)` = roughly the amount of overdraw per pixel
 
 then forwards is `O(P . L . log2(G))` and deferred is `O(P . log2(G) + P . L)`. Deferred is clearly better here. But it is super heavy in terms of the number of render targets it requires, especially for PBR where you have albedo+normal+metallic+roughness+(any other materials params, emission, IoR, clearcoat).
 
@@ -113,4 +113,30 @@ A few more modern options:
 - Instead of storing texture data in the deferred pass, store the data needed to read it!
 - Could be a various combination of things but generally involves the triangle barycentrics (a `vec2`). Could be the Material ID + normal + barycentrics OR mesh id + triangle id + barycentrics or anything else
 - `VK_KHR_fragment_shader_barycentric` makes implementation easier but I'm not sure how supported it is.
-- See that 'deferred texturing in horizon forbidden west slidedeck'. 
+- See that 'deferred texturing in horizon forbidden west slidedeck'.
+
+# Texture Formats
+
+# Model Formats
+
+
+# Post Processing
+
+## Bloom
+
+Best implementation I know about comes from [Next Generation Post Processing in Call of Duty: Advanced Warfare](https://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare/).
+I've implemented this previously in [expenses/bloom](https://github.com/expenses/bloom) and [expenses/space-renderer](https://github.com/expenses/space-renderer).
+
+## Bokeh Depth of Field
+
+Depth of field is fun but probably not something you want to use without good reason. Bokeh is a super important of it, but means that you can't use a simple seperatable gaussian blur.
+
+For something quick and dirty, [Bokeh depth of field in a single pass](https://blog.voxagon.se/2018/05/04/bokeh-depth-of-field-in-single-pass.html) works well enough. I've previously used this [here](https://github.com/expenses/space-renderer/blob/cde4a7f94fa7110e0d24d88eac536572effa487b/shaders/compute_dof.hlsl).
+
+A proper, more performant way to do things is to [Circular Separable Convolution Depth of Field](https://www.ea.com/frostbite/news/circular-separable-convolution-depth-of-field). This involves generating a set of blur kernels via [CircularDofFilterGenerator](https://github.com/kecho/CircularDofFilterGenerator) and blurring in one direction, then the next, then compositing things together. Note that each kernel generates a complex number (essentially a `vec2`) for each input scalar (r,g,b) so for a 2-kernel blur you end up with 2*3*2=12 components that you need to store inbetween passes. A `Texture2DArray` of 3 `rgba16f` textures works fine for this.
+
+[Computerphile has a good explaination of this stuff](https://www.youtube.com/watch?app=desktop&v=vNG3ZAd8wCc).
+
+## Display Transforms / 'tonemapping'
+
+I already wrote a bunch of stuff about this but firefox crashes so tldr; use https://github.com/sobotka/AgX or https://github.com/h3r2tic/tony-mc-mapface. Definitely not the 'uncharted 2 tonemapper' or 'aces filmic' or whatever. Will add more here soon.
