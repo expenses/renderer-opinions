@@ -87,11 +87,21 @@ For sprite-based games, this last part is especially important as almost every s
 
 Firstly, you want to create a tightly-bound mesh around the core of the sprite such that you are rendering very few areas that are completely transparent. This is a fairly well-known technique and you'll find a ton of mesh generators for this sort of thing, although I haven't used any myself. The extra triangle processing work is negligable compared to the savings on fragment work.
 
+![image](https://user-images.githubusercontent.com/13566135/282970930-d8817617-cd50-4671-b488-4023fc758762.png)
+
+_Example from https://docs.cocos2d-x.org/cocos2d-x/v3/en/sprites/polygon.html_
+
 What you want to do instead is to attempt to render everything front-to-back, writing a an appropriate value to the depth buffer for the 'layer' the sprite is on. For anything with more-or-less binary alpha, alpha-clipping via a `discard` in the fragment shader should get you what you want, although you might need some anti-aliasing such as [MSAA with alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f).
 
-Handling sprites with a significant amount of semi-transparent alpha is a bit harder. It's possible that using MSAA with a large number of samples (16x) and [alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f) will result in something that looks acceptable. If not, you want to do things in two passes:
-- Render the sprites front-to-back, `discard`ing if the alpha value is less than 1 and writing to the depth buffer
+Handling sprites with a significant amount of semi-transparent alpha is a bit harder.
+
+Provided you don't mind matching a ground-truth alpha blend exactly, the first thing I'd try is using MSAA with [alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f) along with [hashed alpha testing](https://cwyman.org/papers/i3d17_hashedAlpha.pdf). Depending on how that goes you could drop either the alpha-to-coverage requirement or the hashed-testing requirement.
+
+If that's not good enough then you need another approach. I think you want to do things in two passes:
+- Render the sprites front-to-back, either with a different mesh that contains only opaque pixels or by `discard`ing if the alpha value is less than 1, writing to the depth buffer
 - Rendering all sprites again back-to-front with alpha-blending, such that only the fragment shader and blending are only performed for the semi-transparent regions.
+
+This technique is fairly well documented and is mentioned in [this Arm Software Developers video](https://www.youtube.com/watch?v=q0uxKQe91Yk). Keep in mind that with this technique, you still have roughly O(n) overdraw for the number of sprites on the screen.
 
 # Culling
 
