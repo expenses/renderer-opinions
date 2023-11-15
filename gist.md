@@ -91,7 +91,7 @@ Firstly, you want to create a tightly-bound mesh around the core of the sprite s
 
 _Example from https://docs.cocos2d-x.org/cocos2d-x/v3/en/sprites/polygon.html_
 
-What you want to do instead is to attempt to render everything front-to-back, writing a an appropriate value to the depth buffer for the 'layer' the sprite is on. For anything with more-or-less binary alpha, alpha-clipping via a `discard` in the fragment shader should get you what you want, although you might need some anti-aliasing such as [MSAA with alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f).
+What you want to do instead is to attempt to render everything front-to-back, writing a an appropriate value to the depth buffer for the 'layer' the sprite is on. For anything with more-or-less binary alpha, alpha-clipping via a `discard` in the fragment shader should get you what you want, although you might need some anti-aliasing such as [MSAA with alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f). Any post-process anti-aliasing (see the section below) should also work.
 
 Handling sprites with a significant amount of semi-transparent alpha is a bit harder.
 
@@ -168,3 +168,31 @@ A proper, more performant way to do things is to [Circular Separable Convolution
 ## Display Transforms / 'tonemapping'
 
 I already wrote a bunch of stuff about this but firefox crashes so tldr; use https://github.com/sobotka/AgX or https://github.com/h3r2tic/tony-mc-mapface. Definitely not the 'uncharted 2 tonemapper' or 'aces filmic' or whatever. Will add more here soon.
+
+## Post-processing Anti-Aliasing
+
+Thought I'd document implementations of these because they can be hard to find.
+
+### TAA
+
+As far as I'm aware this is considered the best method, but has a bunch of drawbacks as mentions here: https://alextardif.com/Antialiasing.html
+
+There's also a community of people who really, really don't like it. See https://www.reddit.com/r/FuckTAA/comments/rf7mkn/heres_an_excellent_example_of_the_horrendus_taa/.
+
+Some resources:
+
+- https://alextardif.com/TAA.html
+- https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/ is a lovely visual
+guide
+- https://github.com/NVIDIAGameWorks/Falcor/blob/95b516307065216b67aa6700c27e3777b3ad3811/Source/RenderPasses/TAA/TAA.ps.slang is an Nvidia implementation, but written in their funky shading language.
+
+### SMAA
+
+Looks like it has an official implementation over at https://github.com/iryoku/smaa. Doesn't do any temporal stuff. Potentially a good default choice?
+
+### FXAA
+
+Old and a bit blurry but fast.
+
+- This is the easiest implementation to find: https://gist.github.com/kosua20/0c506b81b3812ac900048059d2383126
+- There is probably also code for it in this sample: https://docs.nvidia.com/gameworks/content/gameworkslibrary/graphicssamples/opengl_samples/fxaa.htm
