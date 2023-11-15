@@ -145,8 +145,51 @@ A few more modern options:
 
 # Texture Formats
 
+_TODO_
+
+PNGs and JPEGs kinda suck for graphics, but you can get away with them if you've got a small sprite-based game. For anything else, either DDS (older and designed for DirectX) or KTX2 (newer and designed for Vulkan but less well supported) are good choices.
+
 # Model Formats
 
+_TODO_
+
+Fbx or glTF?
+
+# Shading
+
+## Materials
+
+For materials, PBR is the only thing that makes sense. I'm not quite sure where the best place to copy the BSDF functions from is, but there are many implementations available. Quite a few people mention https://google.github.io/filament/Filament.html.
+
+## Lighting
+
+- Standard Point Lights
+- Linearly-Transformed-Cosine Line Lights
+  - https://www.elopezr.com/rendering-line-lights/
+  - https://zero-radiance.github.io/post/line-lights/
+- Image-Based Lighting
+  - IMO it's a little wasteful to use 2 seperate cubemaps for both the diffuse and specular BSDFs. Probably best to use spherical harmonics for the diffuse factor and the full cubemap for specular. See https://github.com/DGriffin91/cubemap-spherical-harmonics.
+
+### Global Illumination
+
+Global illumination is a big and complicated field, especially when we're talking about anything close to dynamic, real time stuff.
+
+For baked GI I'm enthusiastic about the spherical harmonic approach implemented in [Precomputed
+Global Illumination
+in Frostbite](https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc2018-precomputedgiobalilluminationinfrostbite.pdf). Ghost of Tsushima used a similar approach where instead of baking the full irradiance to spherical harmonics, they baked out how much of the sky is visible for a given point and combined that with their real-time sky model. Slides here: https://www.glowybits.com/blog/2022/12/18/ghost_talks/.
+
+## Shadow Maps
+
+The state of the art in terms of real-time shadows is .. just ray tracing them. Even when you take the temporal denoising into consideration, ray tracing shadows is still easier than writing out proper shadow maps. But that's not an option for most use-cases yet, so here we are.
+
+I've implemented cascaded shadow maps with PCF in the past. If I were to do that now I'd start with the following few resources:
+- https://therealmjp.github.io/posts/shadow-sample-update/
+- https://therealmjp.github.io/posts/shadow-maps/
+- https://github.com/TheRealMJP/Shadows
+
+For the shadows of point lights, you want to end up rendering out a cubemap. It might be best to use virtual shadowmaps for this in order to save on the number of times you switch render attachment. Not sure though. See:
+- http://www.adriancourreges.com/blog/2016/09/09/doom-2016-graphics-study/#shadow-map-atlas
+- https://docs.unrealengine.com/5.2/en-US/virtual-shadow-maps-in-unreal-engine/
 
 # Post Processing
 
@@ -175,9 +218,9 @@ Thought I'd document implementations of these because they can be hard to find.
 
 ### TAA
 
-As far as I'm aware this is considered the best method, but has a bunch of drawbacks as mentions here: https://alextardif.com/Antialiasing.html
+As far as I'm aware this is considered the best method, but has a bunch of drawbacks as mentions here: https://alextardif.com/Antialiasing.html. There's also a community of people who really, really don't like it. See https://www.reddit.com/r/FuckTAA/comments/rf7mkn/heres_an_excellent_example_of_the_horrendus_taa/.
 
-There's also a community of people who really, really don't like it. See https://www.reddit.com/r/FuckTAA/comments/rf7mkn/heres_an_excellent_example_of_the_horrendus_taa/.
+My stance on any kind of temporal stuff is that going from a sitation where you can say that every frame is perfect to one where the quality of a frame depends on the frames before it is a _big_ compromise and you should make sure you're getting your money's worth when commiting to that.
 
 Some resources:
 
