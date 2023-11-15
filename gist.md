@@ -239,3 +239,7 @@ Old and a bit blurry but fast.
 
 - This is the easiest implementation to find: https://gist.github.com/kosua20/0c506b81b3812ac900048059d2383126
 - There is probably also code for it in this sample: https://docs.nvidia.com/gameworks/content/gameworkslibrary/graphicssamples/opengl_samples/fxaa.htm
+
+# Bonus Graph
+
+![graph](https://user-images.githubusercontent.com/13566135/283034477-869af9af-96ff-44cb-a283-7caa0f46d4f6.png)
