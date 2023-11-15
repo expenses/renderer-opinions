@@ -75,6 +75,24 @@ The idea here is that you have a large array of image descriptors in a descripto
 ![onion_textures_know_the_diff](https://user-images.githubusercontent.com/13566135/282337180-11e53f09-ea70-49a6-bd0f-3dacb264393d.png)
 _from https://chunkstories.xyz/blog/a-note-on-descriptor-indexing/_
 
+# Okay, but what about 2D games?
+
+Does any of this stuff apply when you just want to render sprites and not 3D models? The short answer is yes. You should absolutely be treating any kind of 2D renderer the same was as a 3D one. The same considerations apply:
+
+- Move as much work to the GPU as possible
+- Do as much work in as few calls as possible
+- Use the depth buffer as much as possible
+
+For sprite-based games, this last part is especially important as almost every sprite makes use of an alpha channel. It's common practice for 2D games to enable alpha-blending in the pipeline and draw everything back-to-front, not using a depth buffer at all. This is really bad, as the amount of fragment shading work being done per-pixel scales with the number of sprites on screen.
+
+Firstly, you want to create a tightly-bound mesh around the core of the sprite such that you are rendering very few areas that are completely transparent. This is a fairly well-known technique and you'll find a ton of mesh generators for this sort of thing, although I haven't used any myself. The extra triangle processing work is negligable compared to the savings on fragment work.
+
+What you want to do instead is to attempt to render everything front-to-back, writing a an appropriate value to the depth buffer for the 'layer' the sprite is on. For anything with more-or-less binary alpha, alpha-clipping via a `discard` in the fragment shader should get you what you want, although you might need some anti-aliasing such as [MSAA with alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f).
+
+Handling sprites with a significant amount of semi-transparent alpha is a bit harder. It's possible that using MSAA with a large number of samples (16x) and [alpha-to-coverage](https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f) will result in something that looks acceptable. If not, you want to do things in two passes:
+- Render the sprites front-to-back, `discard`ing if the alpha value is less than 1 and writing to the depth buffer
+- Rendering all sprites again back-to-front with alpha-blending, such that only the fragment shader and blending are only performed for the semi-transparent regions.
+
 # Culling
 
 - Compute shader takes in scene geometry and their bounding sphere and culls it if it's not visible in the view frustum.
