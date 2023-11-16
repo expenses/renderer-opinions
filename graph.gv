@@ -1,0 +1,92 @@
+digraph {
+    node [shape=rect]; "Light Clustering"; "Geometry Culling *"; deferred_tex; "Depth of Field *"; "Bloom"; "Display Transform"; "AA Resolve"; deferred_ao; deferred_rt; forwards_ao; forwards_rt
+    node[shape=oval]
+
+	frame_start[label = "Start"]
+
+    "Start" -> "Texture Loading" -> "Mipmap Generation *" -> frame_start
+    "Texture Loading" -> frame_start
+
+    "Start" -> "Model Loading" -> "Meshlet Generation *" -> frame_start
+    "Model Loading" -> frame_start
+    "Model Loading" -> "Texture Loading"
+
+subgraph cluster_render_loop {
+	label = "Frame"
+	frame_start -> "Geometry Culling *" -> "Pipeline Barrier"
+	frame_start -> "Light Clustering" -> "Pipeline Barrier"
+
+	subgraph cluster_compute_shader_dispatches {
+		"Geometry Culling *"
+		"Light Clustering"
+		label = "Compute Shader Dispatches"
+	}
+	"Pipeline Barrier" -> depth_o
+	"Pipeline Barrier" -> vis_o
+
+	subgraph cluster_deferred_texturing {
+		label =  "One Option: Deferred Texturing"
+		subgraph cluster_visbuffer {
+			vis_o[label = "Opaque Objects"]
+			vis_ac[label = "Alpha-Clipped Objects"]
+			vis_o -> vis_ac
+			label = "Visibility Buffer Pass"
+		}
+
+		subgraph cluster_depth_only {
+			label = "Passes with depth as a pre-req"
+			deferred_ao[label = "Ambient Occlusion *"]
+			deferred_rt[label = "Ray-Traced Shadows *"]
+		}
+
+		deferred_tex[label = "Deferred Texturing and Lighting"]
+		deferred_alpha[label = "Alpha-Blended/Transmissive Objects *"]
+
+		vis_ac -> deferred_ao -> deferred_tex
+		vis_ac -> deferred_rt -> deferred_tex
+		vis_ac -> deferred_tex -> deferred_alpha
+	}
+
+	subgraph cluster_forwards_with_depth_pre_pass {
+		label = "One Option: Forwards Rendering with a depth pre-pass"
+	subgraph cluster_depth_pre {
+		depth_ac[label = "Alpha-Clipped Objects"]
+		depth_o[label = "Opaque Objects"]
+		depth_o -> depth_ac
+		label = "Depth Pre-Pass"
+	}
+
+	subgraph cluster_depth_only {
+			label = "Passes with depth as a pre-req"
+		forwards_ao[label = "Ambient Occlusion *"]
+		forwards_rt[label = "Ray-Traced Shadows *"]
+	}
+
+	depth_ac -> forwards_main
+
+	depth_ac -> forwards_ao -> forwards_main
+	depth_ac -> forwards_rt -> forwards_main
+
+	subgraph cluster_rendering {
+		forwards_main[label="Opaque & Alpha-Clipped Objects"]
+		forwards_alpha[label="Alpha-Blended/Transmissive Objects *"]
+		forwards_main -> forwards_alpha
+		label = "Main Pass"
+	}
+}
+
+deferred_tex -> post_start
+deferred_alpha -> post_start
+forwards_main -> post_start
+forwards_alpha -> post_start
+
+subgraph cluster_post {
+	post_start[label = "Start"]
+	post_start -> "Depth of Field *" -> "Bloom" -> "Display Transform" -> "AA Resolve"
+	post_start -> "Bloom"
+	label = "Post Processing"
+}
+
+"AA Resolve" -> "Submit" -> "Present"
+}
+}
