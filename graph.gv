@@ -1,5 +1,5 @@
 digraph {
-    node [shape=rect]; "Light Clustering"; "Geometry Culling *"; deferred_tex; "Depth of Field *"; "Bloom"; "Display Transform"; "AA Resolve"; deferred_ao; deferred_rt; forwards_ao; forwards_rt
+    node [shape=rect]; "Light Clustering"; "Geometry Culling *"; deferred_tex; "Depth of Field *"; "Bloom"; "Display Transform"; "AA Resolve"; forwards_ao; forwards_rt
     node[shape=oval]
 
 	frame_start[label = "Start"]
@@ -23,9 +23,10 @@ subgraph cluster_render_loop {
 	}
 	"Pipeline Barrier" -> depth_o
 	"Pipeline Barrier" -> vis_o
+	"Pipeline Barrier" -> forwards_shadows
 
 	subgraph cluster_deferred_texturing {
-		label =  "One Option: Deferred Texturing"
+		label =  "One Option: Deferred Texturing (simplified)"
 		subgraph cluster_visbuffer {
 			vis_o[label = "Opaque Objects"]
 			vis_ac[label = "Alpha-Clipped Objects"]
@@ -33,28 +34,25 @@ subgraph cluster_render_loop {
 			label = "Visibility Buffer Pass"
 		}
 
-		subgraph cluster_depth_only {
-			label = "Passes with depth as a pre-req"
-			deferred_ao[label = "Ambient Occlusion *"]
-			deferred_rt[label = "Ray-Traced Shadows *"]
-		}
-
 		deferred_tex[label = "Deferred Texturing and Lighting"]
 		deferred_alpha[label = "Alpha-Blended/Transmissive Objects *"]
 
-		vis_ac -> deferred_ao -> deferred_tex
-		vis_ac -> deferred_rt -> deferred_tex
 		vis_ac -> deferred_tex -> deferred_alpha
 	}
 
 	subgraph cluster_forwards_with_depth_pre_pass {
 		label = "One Option: Forwards Rendering with a depth pre-pass"
+
 	subgraph cluster_depth_pre {
 		depth_ac[label = "Alpha-Clipped Objects"]
 		depth_o[label = "Opaque Objects"]
 		depth_o -> depth_ac
 		label = "Depth Pre-Pass"
 	}
+
+	forwards_shadows[label = "Shadowmap rendering *"]
+
+	forwards_shadows -> forwards_main
 
 	subgraph cluster_depth_only {
 			label = "Passes with depth as a pre-req"
@@ -87,6 +85,7 @@ subgraph cluster_post {
 	label = "Post Processing"
 }
 
+"AA Resolve" -> "UI Rendering *" -> "Submit"
 "AA Resolve" -> "Submit" -> "Present"
 }
 }

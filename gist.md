@@ -186,6 +186,7 @@ I've implemented cascaded shadow maps with PCF in the past. If I were to do that
 - https://therealmjp.github.io/posts/shadow-sample-update/
 - https://therealmjp.github.io/posts/shadow-maps/
 - https://github.com/TheRealMJP/Shadows
+- https://learn.microsoft.com/en-us/windows/win32/dxtecharts/cascaded-shadow-maps
 
 For the shadows of point lights, you want to end up rendering out a cubemap. It might be best to use virtual shadowmaps for this in order to save on the number of times you switch render attachment. Not sure though. See:
 - http://www.adriancourreges.com/blog/2016/09/09/doom-2016-graphics-study/#shadow-map-atlas
@@ -220,7 +221,7 @@ Thought I'd document implementations of these because they can be hard to find.
 
 As far as I'm aware this is considered the best method, but has a bunch of drawbacks as mentions here: https://alextardif.com/Antialiasing.html. There's also a community of people who really, really don't like it. See https://www.reddit.com/r/FuckTAA/comments/rf7mkn/heres_an_excellent_example_of_the_horrendus_taa/.
 
-My stance on any kind of temporal stuff is that going from a sitation where you can say that every frame is perfect to one where the quality of a frame depends on the frames before it is a _big_ compromise and you should make sure you're getting your money's worth when commiting to that.
+My stance on any kind of temporal stuff is that going from a sitation where you can say that every frame is perfect to one where the quality of a frame depends on the frames before it is a _big_ compromise and you should make sure you're getting your money's worth when commiting to that. Very much a 'rob Peter to pay Paul'-type situation.
 
 Some resources:
 
@@ -239,6 +240,18 @@ Old and a bit blurry but fast.
 
 - This is the easiest implementation to find: https://gist.github.com/kosua20/0c506b81b3812ac900048059d2383126
 - There is probably also code for it in this sample: https://docs.nvidia.com/gameworks/content/gameworkslibrary/graphicssamples/opengl_samples/fxaa.htm
+
+# Debugging / Profiling
+
+- [RenderDoc](https://renderdoc.org/) is your new best friend for debugging, and pretty good for profiling too
+- For real-time profiling you can use something that updates an imgui window, but writing to [Tracy](https://github.com/wolfpld/tracy) is also very powerful.
+- Query pools are the way to get device timestamps for anything that happens on the gpu. See https://github.com/expenses/transmission-renderer/blob/dodgy-tracy-support/src/profiling.rs for an example of how I implemented this in the past.
+
+# Visualisation Tools
+
+- [Shadertoy](https://www.desmos.com/calculator) naturally
+- [Desmos](https://www.desmos.com/calculator) for graphing functions and any maths stuff.
+
 
 # Bonus Graph
 
