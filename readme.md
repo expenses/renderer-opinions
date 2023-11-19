@@ -72,7 +72,7 @@ It's the better option! Still not great, but better.
 
 The idea here is that you have a large array of image descriptors in a descriptor set that you index into dynamically in a shader. The terminology sucks here, as hopefully indicated by the below image. Handling new images is pretty easy, just add the image to the descriptor set and get it's index for accessing. For removals, you want to record that the index is empty and can be re-used. This works on most modern hardware. I think Macs had some problem with it a whileback (via MoltenVK) but that seems to no longer be an issue.
 
-![onion_textures_know_the_diff](https://user-images.githubusercontent.com/13566135/282337180-11e53f09-ea70-49a6-bd0f-3dacb264393d.png)
+![onion_textures_know_the_diff](images/onion_textures.png)
 _from https://chunkstories.xyz/blog/a-note-on-descriptor-indexing/_
 
 # Okay, but what about 2D games?
@@ -87,7 +87,7 @@ For sprite-based games, this last part is especially important as almost every s
 
 Firstly, you want to create a tightly-bound mesh around the core of the sprite such that you are rendering very few areas that are completely transparent. This is a fairly well-known technique and you'll find a ton of mesh generators for this sort of thing, although I haven't used any myself. The extra triangle processing work is negligable compared to the savings on fragment work.
 
-![image](https://user-images.githubusercontent.com/13566135/282970930-d8817617-cd50-4671-b488-4023fc758762.png)
+![image](images/sprite-polygon.png)
 
 _Example from https://docs.cocos2d-x.org/cocos2d-x/v3/en/sprites/polygon.html_
 
@@ -243,9 +243,16 @@ Old and a bit blurry but fast.
 
 # Debugging / Profiling
 
-- [RenderDoc](https://renderdoc.org/) is your new best friend for debugging, and pretty good for profiling too
-- For real-time profiling you can use something that updates an imgui window, but writing to [Tracy](https://github.com/wolfpld/tracy) is also very powerful.
-- Query pools are the way to get device timestamps for anything that happens on the gpu. See https://github.com/expenses/transmission-renderer/blob/dodgy-tracy-support/src/profiling.rs for an example of how I implemented this in the past.
+- Use the validation layers and have a debug messenger callback that logs everything!
+- [RenderDoc](https://renderdoc.org/) is your new best friend for debugging, and pretty good for profiling too.
+- Name objects with [`vkSetDebugUtilsObjectNameEXT`](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vkSetDebugUtilsObjectNameEXT.html) so that the validation layers and RenderDoc are more informative.
+- For real-time profiling (both CPU and GPU)  use [Tracy](https://github.com/wolfpld/tracy).
+- If you're struggling with implementing something in a compute shader, [Debug Printf](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md) is extremely useful. Make sure you're only printing from a single thread. If the output isn't being shown, you might need to use `vkconfig` to enable it.
+- Whenever you have some magic number in a shader and are stuggling to find a suitable value for it, have it read from a persistently-mapped uniform buffer that you write to from [imgui](https://github.com/ocornut/imgui).
+- For debugging additional render targets (e.g. shadowmaps), have an option that draws them to a corner of the final output.
+
+![debugging](images/debugging.png)
+_An example of what visual debugging could look like. From my own renderer._
 
 # Visualisation Tools
 
@@ -255,4 +262,4 @@ Old and a bit blurry but fast.
 
 # Bonus Graph
 
-![graph](https://user-images.githubusercontent.com/13566135/283034477-869af9af-96ff-44cb-a283-7caa0f46d4f6.png)
+![graph](images/graph.png)
