@@ -46,44 +46,80 @@ There are 3 main requirements to unlocking GPU-driven rendering:
 
 # Bindless
 
+## Problem Statement
+
+We want to go from a situation where we have N per-material/mesh descriptor sets to a single large descriptor set, so that we can bind it once at the beginning of rendering and then be done. This is a crucial part of being able to get rid of any `for` loops in command buffer recording.
+
 ## Bindless geometry
 
-There are roughly two ways to handle bindless geometry:
+We want to get things to a state where we bind O(1) buffers instead of O(N) per-model buffers.
+
+There are roughly two ways to do this:
 
 ### Concatonate all geometry into big index + vertex buffers
-- This works fine until you want to deallocate any geometry. If you store the ranges of where inside the buffer of where geometry is stored (e.g. `85337..190000`) then you can add that range to a list of empty gaps inside the buffer, and check that list when doing allocations. I've done this in the past.
-- Handling defragmentation sounds painful though.
 
-### Use a seperate buffer for each piece of geometry and use `VK_KHR_buffer_device_address` to access the buffers in shaders.
-  - This is way nicer than the above IMO because it means you can rely on the allocator of your choice (e.g. VMA) to handle allocations and deallocations.
-  - The main downside is that you are relying on `VK_KHR_buffer_device_address` (available on pretty much any devices) and that you have to manually access the index/vertex buffers in the vertex shader.
+- This works pretty well, until you start thinking about allowing for the possibility of deallocating and re-allocating meshes on the fly, e.g. for an open-world type situation where you want to stream things in.
+  - If you don't have that requirement and can fit everything into memory comfortably then go for it!
+  - If you do have this concern, then you probably want to wrap the buffer with [VMA] somehow. This has a few tricky considerations, such as ensuring that any indexing into the buffers are consistent after defragmentation.
+
+### Use a seperate buffer for each piece of geometry but use `VK_KHR_buffer_device_address` to access the buffers in shaders.
+  - This is way nicer than the above IMO because it means you can rely on [VMA] to wholy handle allocations and deallocations and don't need to think about the complexities behind things.
+  - The main downside is that you are relying on `VK_KHR_buffer_device_address` (available on pretty much any devices) and that you have to manually access the index/vertex buffers in the vertex shader (see [Should we get rid of Vertex Buffers? - Wicked Engine](https://wickedengine.net/2017/06/05/should-we-get-rid-of-vertex-buffers/) for performance details).
 
 ## Bindless textures
 
-There's `VK_NVX_image_view_handle` which essentially does the same sorta thing as `VK_KHR_buffer_device_address` but it's Nvidia-only (for now) so we can ignore it.
+Same as the buffer situation, we want to be able to bind all textures at once. Here's a few ways on how to handle this:
 
-### Megatextures
+### Texture Atlases / Megatextures
 
-Yeah, no, these kinda suck unfortunately. They seem hard to manage and had a bunch of pop-in and other issues. RAGE had them, Doom 2016 had them (but less afaik?) and Doom Eternal got rid of them: https://www.doomworld.com/forum/topic/112067-so-megatextures-are-no-more-in-id-tech-7/
+Old-school texture atlases are one way to do bindless texturing. They suck in a lot of ways though:
+
+- You don't get hardware texture-repetition, so trying to repeat an e.g. floor texture doesn't work as-is.
+- You have to manually pack the textures into the atlas using some box-packing algorithm. Trying to do this at runtime probably incurs a significant performance cost.
+- Mipmaps need to be handled very carefully, as just downsampling the texture atlas leads to all the textures blurring into each other. To fix this, textures need to be aligned on some boundary according to the max mip-level and a bunch of other stuff.
+
+#### Megatextures
+
+Rage (2011), Doom (2016) and a few other id software games used a 'megatexture' (also called virtual textures) system where they allocate a huge (16k x 8k in the image below) texture composed of 128x128 (or so) pixel tiles, and write (texture data containing) buffers into it for rendering.
+
+This solves the packing-issue (as all the tiles a regular size) and the mipmap issue (as closer textures can be stored as multiple tiles while a further texture can be only 1 tile). It also manages to save memory as the megatexture is a fixed size and any buffers that are copied into it are only allocated for as long as it takes the copy to happen. Texture-repetition is still an issue though.
+
+I personally think it's just too complicated a system to implement. Rage and Doom had a bunch of pop-in issues and for Doom Eternal they got rid of megatextures: https://www.doomworld.com/forum/topic/112067-so-megatextures-are-no-more-in-id-tech-7/ (see the Digital Foundry vid).
+
+![](images/doom_2016_megatexture.jpg)
+_A mega-texture in Doom (2016). See http://www.adriancourreges.com/blog/2016/09/09/doom-2016-graphics-study/_
 
 ### Descriptor indexing / Arrays of textures
 
-It's the better option! Still not great, but better.
+The better alternative is to use the `descriptorCount` field of `VkDescriptorSetLayoutBinding` to allocate a large array of texture descriptors that you index into dynamically in a shader. To define 'large' here, the `maxDescriptorSetSampledImages` field of `VkPhysicalDeviceLimits` for my laptop's Intel iGPU is defined as `393210` and most desktop GPUs are going to have higher values than this. Try a nice power-of-two like `1024` to begin with and then go up if you run out of descriptors.
 
-The idea here is that you have a large array of image descriptors in a descriptor set that you index into dynamically in a shader. The terminology sucks here, as hopefully indicated by the below image. Handling new images is pretty easy, just add the image to the descriptor set and get it's index for accessing. For removals, you want to record that the index is empty and can be re-used. This works on most modern hardware. I think Macs had some problem with it a whileback (via MoltenVK) but that seems to no longer be an issue.
+Not that an _array of textures_ is not the same thing as a _`texture2DArray`_. This terminology is very confusing as both the term 'array' and the term 'texture' are incredibly overloaded and ambiguous in graphics programming. The below image should help.
+
+Handling new images is pretty easy, just add the image to the descriptor set and get it's index for accessing. For removals, you want to record that the index is empty and can be re-used. You probably want to specify `VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT` as a descriptor binding flag, so that you don't have to update the binding of all `descriptorCount` textures. I don't think this is strictly necessary as you can probably get away with binding some dummy texture for the unused slots, but it might make life easier. The `runtimeDescriptorArray` property of `VkPhysicalDeviceVulkan12Features` also needs to be enabled.
 
 ![onion_textures_know_the_diff](images/onion_textures.png)
 _from https://chunkstories.xyz/blog/a-note-on-descriptor-indexing/_
 
-# Okay, but what about 2D games?
+### `VK_NVX_image_view_handle`
 
-Does any of this stuff apply when you just want to render sprites and not 3D models? The short answer is yes. You should absolutely be treating any kind of 2D renderer the same was as a 3D one. The same considerations apply:
+There's the `VK_NVX_image_view_handle` extension which essentially does the same sorta thing as `VK_KHR_buffer_device_address` but for textures. As implied by the `NVX` in the name, it's Nvidia-only. If a cross-vendor extension comes out in the future, that might be a good approach for textures. See [Descriptorless Rendering in Vulkan](https://msiglreith.gitbook.io/blog/descriptorless-rendering-in-vulkan) for more details.
+
+
+# Keep It Stupid Simple
+
+Another way to think about things is to abide by a few simple rules:
 
 - Move as much work to the GPU as possible
 - Do as much work in as few calls as possible
 - Use the depth buffer as much as possible
 
-For sprite-based games, this last part is especially important as almost every sprite makes use of an alpha channel. It's common practice for 2D games to enable alpha-blending in the pipeline and draw everything back-to-front, not using a depth buffer at all. This is really bad, as the amount of fragment shading work being done per-pixel scales with the number of sprites on screen.
+Not only does 'bindless' make things faster, it also keeps them simpler. Instead of having a situation where you have 1 globeal descriptor set + N per-material/mesh descriptor sets, you can just have a single, large descriptor set that contains everything! Generally this will be your big array of images, a few storage buffers, a few other framebuffer textures, a few samplers and a uniform buffer.
+
+# Okay, but what about 2D games?
+
+Does any of this stuff apply when you just want to render sprites and not 3D models? The short answer is yes. You should absolutely be treating any kind of 2D renderer the same was as a 3D one. The same above rules still apply.
+
+For sprite-based games, the depth-buffer rule is especially important as almost every sprite makes use of an alpha channel. It's common practice for 2D games to enable alpha-blending in the pipeline and draw everything back-to-front, not using a depth buffer at all. This is really bad, as the amount of fragment shading work being done per-pixel scales with the number of sprites on screen.
 
 Firstly, you want to create a tightly-bound mesh around the core of the sprite such that you are rendering very few areas that are completely transparent. This is a fairly well-known technique and you'll find a ton of mesh generators for this sort of thing, although I haven't used any myself. The extra triangle processing work is negligable compared to the savings on fragment work.
 
@@ -148,6 +184,11 @@ A few more modern options:
 _TODO_
 
 PNGs and JPEGs kinda suck for graphics, but you can get away with them if you've got a small sprite-based game. For anything else, either DDS (older and designed for DirectX) or KTX2 (newer and designed for Vulkan but less well supported) are good choices.
+
+You can, and possibly should, read both DDS and KTX2 files without requiring any kind of helper library. There are a few annoying parts of writing a DDS file reader for Vulkan:
+
+- They have different format types, so you need to write functions to translate them.
+- DDS files don't specify how large each mip level is in bytes, so you need to calculate this using the bits-per-pixel of the given format. If you're reading block-compressed formats (which you should be using), you need to factor this into the buffer offset for small mips. See [here](https://github.com/expenses/vulkancppstarter/blob/fbbd4abeaa1e7dc066524d891832698594f6aa4c/src/resources/image_loading.cpp#L177-L182).
 
 # Model Formats
 
@@ -263,3 +304,5 @@ _An example of what visual debugging could look like. From my own renderer._
 # Bonus Graph
 
 ![graph](images/graph.png)
+
+[VMA]: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
